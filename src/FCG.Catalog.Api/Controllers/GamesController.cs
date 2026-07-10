@@ -4,6 +4,8 @@ using FCG.Catalog.Application.Commands.UpdateGame;
 using FCG.Catalog.Application.Queries.GetGameById;
 using FCG.Catalog.Application.Queries.GetGames;
 using MediatR;
+using FCG.Catalog.Application.Commands.PurchaseGame;
+using FCG.Catalog.Application.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FCG.Catalog.Api.Controllers;
@@ -63,5 +65,23 @@ public class GamesController : ControllerBase
     {
         await _mediator.Send(new DeleteGameCommand { Id = id }, cancellationToken);
         return NoContent();
+    }
+
+    [HttpPost("{gameId:guid}/purchase")]
+    [ProducesResponseType(typeof(PurchaseGameResponse), StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Purchase(
+    Guid gameId,
+    [FromBody] PurchaseGameRequest request,
+    CancellationToken cancellationToken)
+    {
+        var command = new PurchaseGameCommand(
+            gameId,
+            request.UserId);
+
+        var response = await _mediator.Send(command, cancellationToken);
+
+        return Accepted(response);
     }
 }
