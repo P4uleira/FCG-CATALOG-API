@@ -14,9 +14,15 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDbContext<FCGCatalogDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(
+                configuration.GetConnectionString(
+                    "DefaultConnection")));
 
         services.AddScoped<IGameRepository, GameRepository>();
+
+        services.AddScoped<
+            IUserLibraryRepository,
+            UserLibraryRepository>();
 
         return services;
     }

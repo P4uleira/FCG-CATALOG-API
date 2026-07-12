@@ -1,5 +1,6 @@
 using FCG.Catalog.Api.Middleware;
 using FCG.Catalog.Application.Commands.CreateGame;
+using FCG.Catalog.Application.Consumers;
 using FCG.Catalog.Infrastructure;
 using MassTransit;
 
@@ -11,22 +12,39 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(typeof(CreateGameCommandHandler).Assembly));
+    cfg.RegisterServicesFromAssembly(
+        typeof(CreateGameCommandHandler).Assembly));
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(
+    builder.Configuration);
 
 #region MassTransit
 builder.Services.AddMassTransit(config =>
 {
+    config.AddConsumer<PaymentProcessedEventConsumer>();
+
     config.UsingRabbitMq((context, cfg) =>
     {
-        var rabbitMqConfig = builder.Configuration.GetSection("RabbitMq");
+        var rabbitMqConfig =
+            builder.Configuration.GetSection("RabbitMq");
 
-        cfg.Host(rabbitMqConfig["Host"], "/", h =>
+        cfg.Host(rabbitMqConfig["Host"], "/", host =>
         {
-            h.Username(rabbitMqConfig["Username"]!);
-            h.Password(rabbitMqConfig["Password"]!);
+            host.Username(
+                rabbitMqConfig["Username"]!);
+
+            host.Password(
+                rabbitMqConfig["Password"]!);
         });
+
+        cfg.ReceiveEndpoint(
+            "catalog-payment-processed-event",
+            endpoint =>
+            {
+                endpoint.ConfigureConsumer<
+                    PaymentProcessedEventConsumer>(
+                    context);
+            });
     });
 });
 #endregion
