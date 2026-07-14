@@ -6,19 +6,33 @@ using MassTransit;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+#region Controllers
 
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddMediatR(cfg =>
-    cfg.RegisterServicesFromAssembly(
-        typeof(CreateGameCommandHandler).Assembly));
+#endregion
+
+#region MediatR
+
+builder.Services.AddMediatR(config =>
+{
+    config.RegisterServicesFromAssembly(
+        typeof(CreateGameCommandHandler).Assembly);
+});
+
+#endregion
+
+#region Infrastructure
 
 builder.Services.AddInfrastructure(
     builder.Configuration);
 
+#endregion
+
 #region MassTransit
+
 builder.Services.AddMassTransit(config =>
 {
     config.AddConsumer<PaymentProcessedEventConsumer>();
@@ -28,28 +42,30 @@ builder.Services.AddMassTransit(config =>
         var rabbitMqConfig =
             builder.Configuration.GetSection("RabbitMq");
 
-        cfg.Host(rabbitMqConfig["Host"], "/", host =>
-        {
-            host.Username(
-                rabbitMqConfig["Username"]!);
-
-            host.Password(
-                rabbitMqConfig["Password"]!);
-        });
+        cfg.Host(
+            rabbitMqConfig["Host"],
+            "/",
+            host =>
+            {
+                host.Username(rabbitMqConfig["Username"]!);
+                host.Password(rabbitMqConfig["Password"]!);
+            });
 
         cfg.ReceiveEndpoint(
             "catalog-payment-processed-event",
             endpoint =>
             {
                 endpoint.ConfigureConsumer<
-                    PaymentProcessedEventConsumer>(
-                    context);
+                    PaymentProcessedEventConsumer>(context);
             });
     });
 });
+
 #endregion
 
 var app = builder.Build();
+
+#region Pipeline
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
@@ -59,8 +75,26 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+var isRunningInContainer =
+    string.Equals(
+        Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
+
+if (!isRunningInContainer)
+{
+    app.UseHttpsRedirection();
+}
 
 app.MapControllers();
+
+app.MapGet("/health", () =>
+    Results.Ok(new
+    {
+        service = "CatalogAPI",
+        status = "Healthy"
+    }));
+
+#endregion
 
 app.Run();
