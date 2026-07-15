@@ -4,8 +4,10 @@ using FCG.Catalog.Api.Middleware;
 using FCG.Catalog.Application.Commands.CreateGame;
 using FCG.Catalog.Application.Consumers;
 using FCG.Catalog.Infrastructure;
+using FCG.Catalog.Infrastructure.Data;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -169,6 +171,14 @@ builder.Services.AddMassTransit(config =>
 
 var app = builder.Build();
 
+#region Database Migration
+
+await ApplyMigrationsAsync<FCGCatalogDbContext>(
+    app,
+    "CatalogAPI");
+
+#endregion
+
 #region Pipeline
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
@@ -208,3 +218,63 @@ app.MapGet(
 #endregion
 
 app.Run();
+
+static async Task ApplyMigrationsAsync<TContext>(
+    WebApplication app,
+    string serviceName)
+    where TContext : DbContext
+{
+    const int maxAttempts = 10;
+    var retryDelay = TimeSpan.FromSeconds(5);
+
+    var logger = app.Services
+        .GetRequiredService<ILoggerFactory>()
+        .CreateLogger("DatabaseMigration");
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            await using var scope =
+                app.Services.CreateAsyncScope();
+
+            var dbContext = scope.ServiceProvider
+                .GetRequiredService<TContext>();
+
+            logger.LogInformation(
+                "Aplicando migrations do {ServiceName}. Tentativa {Attempt}/{MaxAttempts}.",
+                serviceName,
+                attempt,
+                maxAttempts);
+
+            await dbContext.Database.MigrateAsync();
+
+            logger.LogInformation(
+                "Migrations do {ServiceName} aplicadas com sucesso.",
+                serviceName);
+
+            return;
+        }
+        catch (Exception exception)
+        {
+            if (attempt == maxAttempts)
+            {
+                logger.LogCritical(
+                    exception,
+                    "Não foi possível aplicar as migrations do {ServiceName} após {MaxAttempts} tentativas.",
+                    serviceName,
+                    maxAttempts);
+
+                throw;
+            }
+
+            logger.LogWarning(
+                exception,
+                "Falha ao aplicar migrations do {ServiceName}. Nova tentativa em {RetrySeconds} segundos.",
+                serviceName,
+                retryDelay.TotalSeconds);
+
+            await Task.Delay(retryDelay);
+        }
+    }
+}

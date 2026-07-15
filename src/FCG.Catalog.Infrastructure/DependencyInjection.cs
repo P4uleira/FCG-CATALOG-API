@@ -13,12 +13,25 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var connectionString =
+            configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException(
+                "Connection string 'DefaultConnection' was not found.");
+
         services.AddDbContext<FCGCatalogDbContext>(options =>
             options.UseSqlServer(
-                configuration.GetConnectionString(
-                    "DefaultConnection")));
+                connectionString,
+                sqlServerOptions =>
+                {
+                    sqlServerOptions.EnableRetryOnFailure(
+                        maxRetryCount: 10,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorNumbersToAdd: null);
+                }));
 
-        services.AddScoped<IGameRepository, GameRepository>();
+        services.AddScoped<
+            IGameRepository,
+            GameRepository>();
 
         services.AddScoped<
             IUserLibraryRepository,
