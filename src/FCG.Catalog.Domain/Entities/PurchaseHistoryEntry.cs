@@ -69,4 +69,27 @@ public class PurchaseHistoryEntry
             status,
             processedAt);
     }
+
+    public static PurchaseHistoryEntry Reconstruct(
+    Guid id,
+    Guid orderId,
+    Guid userId,
+    Guid gameId,
+    decimal price,
+    string status,
+    DateTime processedAt,
+    DateTime registeredAt)
+    {
+        return new PurchaseHistoryEntry
+        {
+            Id = id,
+            OrderId = orderId,
+            UserId = userId,
+            GameId = gameId,
+            Price = price,
+            Status = status,
+            ProcessedAt = processedAt,
+            RegisteredAt = registeredAt
+        };
+    }
 }

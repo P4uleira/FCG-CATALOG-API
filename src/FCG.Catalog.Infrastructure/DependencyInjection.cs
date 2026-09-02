@@ -4,6 +4,7 @@ using FCG.Catalog.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Driver;
 
 namespace FCG.Catalog.Infrastructure;
 
@@ -29,13 +30,36 @@ public static class DependencyInjection
                         errorNumbersToAdd: null);
                 }));
 
-        services.AddScoped<
-            IGameRepository,
-            GameRepository>();
+        services.AddScoped<IGameRepository, GameRepository>();
 
-        services.AddScoped<
-            IUserLibraryRepository,
-            UserLibraryRepository>();
+        services.AddScoped<IUserLibraryRepository, UserLibraryRepository>();
+
+        var mongoConnectionString = configuration["Mongo:ConnectionString"];
+
+        if (string.IsNullOrWhiteSpace(mongoConnectionString))
+        {
+            throw new InvalidOperationException(
+                "A configuracao Mongo:ConnectionString nao foi encontrada.");
+        }
+
+        var mongoDatabaseName = configuration["Mongo:Database"];
+
+        if (string.IsNullOrWhiteSpace(mongoDatabaseName))
+        {
+            throw new InvalidOperationException(
+                "A configuracao Mongo:Database nao foi encontrada.");
+        }
+
+        services.AddSingleton<IMongoClient>(
+            _ => new MongoClient(mongoConnectionString));
+
+        services.AddSingleton(serviceProvider =>
+        {
+            var mongoClient = serviceProvider.GetRequiredService<IMongoClient>();
+            return mongoClient.GetDatabase(mongoDatabaseName);
+        });
+
+        services.AddScoped<IPurchaseHistoryRepository, PurchaseHistoryRepository>();
 
         return services;
     }
