@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
+using FCG.Catalog.Infrastructure.Caching;
 
 namespace FCG.Catalog.Infrastructure;
 
@@ -15,9 +16,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         var connectionString =
-            configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Connection string 'DefaultConnection' was not found.");
+            configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found.");
 
         services.AddDbContext<FCGCatalogDbContext>(options =>
             options.UseSqlServer(
@@ -60,6 +59,22 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IPurchaseHistoryRepository, PurchaseHistoryRepository>();
+
+        services.AddStackExchangeRedisCache(options =>
+        {
+            var redisConnectionString = configuration["Redis:ConnectionString"];
+
+            if (string.IsNullOrWhiteSpace(redisConnectionString))
+            {
+                throw new InvalidOperationException(
+                    "A configuracao Redis:ConnectionString nao foi encontrada.");
+            }
+
+            options.Configuration = redisConnectionString;
+            options.InstanceName = "fcg-catalog:";
+        });
+
+        services.AddScoped<FCG.Catalog.Application.Abstractions.Caching.ICacheService, RedisCacheService>();
 
         return services;
     }

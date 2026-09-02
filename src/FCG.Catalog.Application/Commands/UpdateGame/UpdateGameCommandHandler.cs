@@ -1,5 +1,6 @@
 using FCG.Catalog.Application.DTOs;
 using FCG.Catalog.Domain.Interfaces.Repositories;
+using FCG.Catalog.Application.Abstractions.Caching;
 using MediatR;
 
 namespace FCG.Catalog.Application.Commands.UpdateGame;
@@ -7,10 +8,12 @@ namespace FCG.Catalog.Application.Commands.UpdateGame;
 public class UpdateGameCommandHandler : IRequestHandler<UpdateGameCommand, GameDto>
 {
     private readonly IGameRepository _gameRepository;
+    private readonly ICacheService _cacheService;
 
-    public UpdateGameCommandHandler(IGameRepository gameRepository)
+    public UpdateGameCommandHandler(IGameRepository gameRepository, ICacheService cacheService)
     {
         _gameRepository = gameRepository;
+        _cacheService = cacheService;
     }
 
     public async Task<GameDto> Handle(UpdateGameCommand request, CancellationToken cancellationToken)
@@ -32,6 +35,8 @@ public class UpdateGameCommandHandler : IRequestHandler<UpdateGameCommand, GameD
         );
 
         await _gameRepository.UpdateAsync(game, cancellationToken);
+
+        await _cacheService.RemoveAsync(CacheKeys.AllGames, cancellationToken);
 
         return new GameDto
         {
