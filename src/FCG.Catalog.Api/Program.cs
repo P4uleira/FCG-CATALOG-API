@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -183,6 +184,8 @@ await ApplyMigrationsAsync<FCGCatalogDbContext>(
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
+app.UseHttpMetrics();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -214,6 +217,8 @@ app.MapGet(
             status = "Healthy"
         }))
     .AllowAnonymous();
+
+app.MapMetrics().AllowAnonymous();
 
 #endregion
 
