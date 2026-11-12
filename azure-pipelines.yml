@@ -1,0 +1,77 @@
+# Pipeline CI da FCG Catalog API
+# Etapas: Build & Test -> Build da imagem Docker -> Push para o ACR
+# (o Deploy no AKS será adicionado como um novo stage no próximo passo)
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none
+
+pool:
+  vmImage: ubuntu-24.04
+
+variables:
+  dockerRegistryServiceConnection: 'acr-fcg'          # nome da service connection criada no Azure DevOps
+  containerRegistry: 'acrfcgfiap.azurecr.io'
+  imageRepository: 'fcg-catalog-api'
+  dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
+  solution: 'FCG.Catalog.slnx'
+  buildConfiguration: 'Release'
+  tag: '$(Build.BuildId)'                             # versão da imagem = número do build
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build & Test'
+    jobs:
+      - job: BuildAndTest
+        displayName: 'Compilar e rodar testes unitários'
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Instalar .NET 10 SDK'
+            inputs:
+              packageType: 'sdk'
+              version: '10.0.x'
+
+          - script: dotnet restore $(solution)
+            displayName: 'dotnet restore'
+
+          - script: dotnet build $(solution) --configuration $(buildConfiguration) --no-restore
+            displayName: 'dotnet build'
+
+          - script: >
+              dotnet test $(solution)
+              --configuration $(buildConfiguration)
+              --no-build
+              --logger trx
+              --results-directory $(Agent.TempDirectory)/TestResults
+            displayName: 'dotnet test'
+
+          - task: PublishTestResults@2
+            displayName: 'Publicar resultados dos testes'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '**/*.trx'
+              searchFolder: '$(Agent.TempDirectory)/TestResults'
+
+  - stage: Docker
+    displayName: 'Build & Push da imagem'
+    dependsOn: BuildAndTest
+    condition: succeeded()
+    jobs:
+      - job: Docker
+        displayName: 'Docker build e push para o ACR'
+        steps:
+          - task: Docker@2
+            displayName: 'Build e push da imagem'
+            inputs:
+              command: buildAndPush
+              containerRegistry: $(dockerRegistryServiceConnection)
+              repository: $(imageRepository)
+              dockerfile: $(dockerfilePath)
+              buildContext: '$(Build.SourcesDirectory)'
+              tags: |
+                $(tag)
+                latest
