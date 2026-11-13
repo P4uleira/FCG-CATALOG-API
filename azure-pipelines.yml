@@ -1,4 +1,4 @@
-# Pipeline CI/CD da FCG Users API
+# Pipeline CI/CD da FCG Catalog API
 # Etapas: Build & Test -> Build da imagem Docker -> Push para o ACR
 #        -> Deploy no AKS com Rolling Update (manifestos do repositório FCG-ORCHESTRATION-API)
 
@@ -22,13 +22,13 @@ pool:
 variables:
   dockerRegistryServiceConnection: 'acr-fcg'          # nome da service connection criada no Azure DevOps
   containerRegistry: 'acrfcgfiap.azurecr.io'
-  imageRepository: 'fcg-users-api'
+  imageRepository: 'fcg-catalog-api'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
-  solution: 'FCG.Users.slnx'
+  solution: 'FCG.Catalog.slnx'
   buildConfiguration: 'Release'
   tag: '$(Build.BuildId)'                             # versão da imagem = número do build
   k8sNamespace: 'fcg'
-  k8sDeployment: 'users-api'
+  k8sDeployment: 'catalog-api'
 
 stages:
   - stage: BuildAndTest
@@ -91,7 +91,7 @@ stages:
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - job: Deploy
-        displayName: 'Atualizar users-api no cluster'
+        displayName: 'Atualizar catalog-api no cluster'
         steps:
           - checkout: orchestration
 
@@ -107,10 +107,10 @@ stages:
           - bash: |
               set -euo pipefail
               # Gera o manifesto com a imagem desta build (tag versionada no ACR)
-              sed "s|IMAGE_TAG|$(tag)|g" k8s/users-deployment.yaml > "$AGENT_TEMPDIRECTORY/users-deployment.yaml"
-              grep "image: $(containerRegistry)" "$AGENT_TEMPDIRECTORY/users-deployment.yaml"
+              sed "s|IMAGE_TAG|$(tag)|g" k8s/catalog-deployment.yaml > "$AGENT_TEMPDIRECTORY/catalog-deployment.yaml"
+              grep "image: $(containerRegistry)" "$AGENT_TEMPDIRECTORY/catalog-deployment.yaml"
 
-              kubectl -n $(k8sNamespace) apply -f "$AGENT_TEMPDIRECTORY/users-deployment.yaml" -f k8s/users-service.yaml
+              kubectl -n $(k8sNamespace) apply -f "$AGENT_TEMPDIRECTORY/catalog-deployment.yaml" -f k8s/catalog-service.yaml
             displayName: 'Aplicar manifestos com a nova imagem'
 
           - bash: |
