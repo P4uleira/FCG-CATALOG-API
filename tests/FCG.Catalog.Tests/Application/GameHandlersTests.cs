@@ -13,11 +13,12 @@ public class CreateGameCommandHandlerTests
 {
     private readonly InMemoryGameRepository _repository = new();
     private readonly InMemoryCacheService _cache = new();
+    private readonly InMemoryGameSearchService _search = new();
 
     [Fact]
     public async Task Handle_ShouldCreateGame_AndInvalidateCache()
     {
-        var handler = new CreateGameCommandHandler(_repository, _cache);
+        var handler = new CreateGameCommandHandler(_repository, _cache, _search);
 
         var result = await handler.Handle(new CreateGameCommand
         {
@@ -31,6 +32,8 @@ public class CreateGameCommandHandlerTests
         Assert.Equal("Hollow Knight", result.Title);
         Assert.True(result.Active);
         Assert.Contains(CacheKeys.AllGames, _cache.RemovedKeys);
+        Assert.Single(_search.Indexed);
+        Assert.Equal(result.Id, _search.Indexed[0].Id);
     }
 
     [Theory]
@@ -38,18 +41,19 @@ public class CreateGameCommandHandlerTests
     [InlineData("   ")]
     public async Task Handle_ShouldThrow_WhenTitleIsBlank(string title)
     {
-        var handler = new CreateGameCommandHandler(_repository, _cache);
+        var handler = new CreateGameCommandHandler(_repository, _cache, _search);
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
             new CreateGameCommand { Title = title, Price = 10m }, CancellationToken.None));
 
         Assert.Empty(_repository.Games);
+        Assert.Empty(_search.Indexed);
     }
 
     [Fact]
     public async Task Handle_ShouldThrow_WhenPriceIsNegative()
     {
-        var handler = new CreateGameCommandHandler(_repository, _cache);
+        var handler = new CreateGameCommandHandler(_repository, _cache, _search);
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
             new CreateGameCommand { Title = "Jogo", Price = -1m }, CancellationToken.None));
@@ -62,13 +66,14 @@ public class UpdateGameCommandHandlerTests
 {
     private readonly InMemoryGameRepository _repository = new();
     private readonly InMemoryCacheService _cache = new();
+    private readonly InMemoryGameSearchService _search = new();
 
     [Fact]
     public async Task Handle_ShouldUpdateGame_AndInvalidateCache()
     {
         var game = new Game("Titulo", "Descricao", 10m, "Acao");
         _repository.Games.Add(game);
-        var handler = new UpdateGameCommandHandler(_repository, _cache);
+        var handler = new UpdateGameCommandHandler(_repository, _cache, _search);
 
         var result = await handler.Handle(
             new UpdateGameCommand { Id = game.Id, Price = 30m }, CancellationToken.None);
@@ -76,12 +81,14 @@ public class UpdateGameCommandHandlerTests
         Assert.Equal(30m, result.Price);
         Assert.Equal("Titulo", result.Title);
         Assert.Contains(CacheKeys.AllGames, _cache.RemovedKeys);
+        Assert.Single(_search.Indexed);
+        Assert.Equal(30m, _search.Indexed[0].Price);
     }
 
     [Fact]
     public async Task Handle_ShouldThrow_WhenGameDoesNotExist()
     {
-        var handler = new UpdateGameCommandHandler(_repository, _cache);
+        var handler = new UpdateGameCommandHandler(_repository, _cache, _search);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() => handler.Handle(
             new UpdateGameCommand { Id = Guid.NewGuid(), Price = 30m }, CancellationToken.None));
@@ -92,7 +99,7 @@ public class UpdateGameCommandHandlerTests
     {
         var game = new Game("Titulo", "Descricao", 10m, "Acao");
         _repository.Games.Add(game);
-        var handler = new UpdateGameCommandHandler(_repository, _cache);
+        var handler = new UpdateGameCommandHandler(_repository, _cache, _search);
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
             new UpdateGameCommand { Id = game.Id, Price = -5m }, CancellationToken.None));

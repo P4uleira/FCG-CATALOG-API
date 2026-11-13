@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using FCG.Catalog.Api.BackgroundServices;
 using FCG.Catalog.Api.Middleware;
 using FCG.Catalog.Application.Commands.CreateGame;
 using FCG.Catalog.Application.Consumers;
@@ -119,6 +120,8 @@ builder.Services.AddMediatR(config =>
 
 builder.Services.AddInfrastructure(
     builder.Configuration);
+
+builder.Services.AddHostedService<SearchIndexInitializer>();
 
 #endregion
 

@@ -2,10 +2,12 @@ using System.Security.Claims;
 using FCG.Catalog.Application.Commands.CreateGame;
 using FCG.Catalog.Application.Commands.DeleteGame;
 using FCG.Catalog.Application.Commands.PurchaseGame;
+using FCG.Catalog.Application.Commands.ReindexGames;
 using FCG.Catalog.Application.Commands.UpdateGame;
 using FCG.Catalog.Application.DTOs;
 using FCG.Catalog.Application.Queries.GetGameById;
 using FCG.Catalog.Application.Queries.GetGames;
+using FCG.Catalog.Application.Queries.SearchGames;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -57,6 +59,48 @@ public sealed class GamesController : ControllerBase
             cancellationToken);
 
         return Ok(games);
+    }
+
+    /// <summary>
+    /// Busca avançada no Elasticsearch, independente do banco relacional.
+    /// Tolera erros de digitação (fuzzy) e ordena por relevância.
+    /// Exemplo: GET /api/games/search?q=zelda
+    /// Endpoint público.
+    /// </summary>
+    [AllowAnonymous]
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(IReadOnlyList<GameSearchResultDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Search(
+        [FromQuery(Name = "q")] string? term,
+        [FromQuery] int size,
+        CancellationToken cancellationToken)
+    {
+        var results = await _mediator.Send(
+            new SearchGamesQuery
+            {
+                Term = term ?? string.Empty,
+                Size = size <= 0 ? 10 : size
+            },
+            cancellationToken);
+
+        return Ok(results);
+    }
+
+    /// <summary>
+    /// Reconstrói o índice de busca a partir do banco principal.
+    /// Apenas administradores.
+    /// </summary>
+    [Authorize(Roles = "Admin")]
+    [HttpPost("search/reindex")]
+    public async Task<IActionResult> Reindex(
+        CancellationToken cancellationToken)
+    {
+        var indexed = await _mediator.Send(
+            new ReindexGamesCommand(),
+            cancellationToken);
+
+        return Ok(new { indexed });
     }
 
     /// <summary>

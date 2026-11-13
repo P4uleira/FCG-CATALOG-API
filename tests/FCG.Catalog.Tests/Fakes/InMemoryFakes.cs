@@ -1,5 +1,7 @@
 using System.Text.Json;
 using FCG.Catalog.Application.Abstractions.Caching;
+using FCG.Catalog.Application.Abstractions.Search;
+using FCG.Catalog.Application.DTOs;
 using FCG.Catalog.Domain.Entities;
 using FCG.Catalog.Domain.Interfaces.Repositories;
 
@@ -54,5 +56,36 @@ public class InMemoryCacheService : ICacheService
         _store.Remove(key);
         RemovedKeys.Add(key);
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Motor de busca falso: registra o que foi indexado/buscado.</summary>
+public class InMemoryGameSearchService : IGameSearchService
+{
+    public List<Game> Indexed { get; } = new();
+    public IReadOnlyCollection<Game>? LastSync { get; private set; }
+    public string? LastTerm { get; private set; }
+    public int? LastSize { get; private set; }
+    public List<GameSearchResultDto> Results { get; } = new();
+
+    public Task EnsureIndexAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task IndexAsync(Game game, CancellationToken cancellationToken)
+    {
+        Indexed.Add(game);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> SyncAllAsync(IReadOnlyCollection<Game> games, CancellationToken cancellationToken)
+    {
+        LastSync = games;
+        return Task.FromResult(games.Count);
+    }
+
+    public Task<IReadOnlyList<GameSearchResultDto>> SearchAsync(string term, int size, CancellationToken cancellationToken)
+    {
+        LastTerm = term;
+        LastSize = size;
+        return Task.FromResult<IReadOnlyList<GameSearchResultDto>>(Results);
     }
 }

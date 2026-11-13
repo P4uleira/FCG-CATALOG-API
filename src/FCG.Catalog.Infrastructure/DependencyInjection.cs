@@ -6,6 +6,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using FCG.Catalog.Infrastructure.Caching;
+using FCG.Catalog.Infrastructure.Search;
+using FCG.Catalog.Application.Abstractions.Search;
+using System.Net.Http.Headers;
+using Microsoft.Extensions.Logging;
 
 namespace FCG.Catalog.Infrastructure;
 
@@ -76,6 +80,45 @@ public static class DependencyInjection
 
         services.AddScoped<FCG.Catalog.Application.Abstractions.Caching.ICacheService, RedisCacheService>();
 
+        AddSearch(services, configuration);
+
         return services;
+    }
+
+    private static void AddSearch(IServiceCollection services, IConfiguration configuration)
+    {
+        var elasticsearchUrl = configuration["Elasticsearch:Url"];
+
+        if (string.IsNullOrWhiteSpace(elasticsearchUrl))
+        {
+            services.AddSingleton<IGameSearchService, NoOpGameSearchService>();
+            return;
+        }
+
+        var apiKey = configuration["Elasticsearch:ApiKey"];
+        var indexName = configuration["Elasticsearch:IndexName"];
+
+        if (string.IsNullOrWhiteSpace(indexName))
+            indexName = "fcg-games";
+
+        services.AddSingleton<IGameSearchService>(serviceProvider =>
+        {
+            var httpClient = new HttpClient
+            {
+                BaseAddress = new Uri(elasticsearchUrl.TrimEnd('/') + "/"),
+                Timeout = TimeSpan.FromSeconds(10)
+            };
+
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                httpClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("ApiKey", apiKey);
+            }
+
+            return new ElasticGameSearchService(
+                httpClient,
+                indexName.ToLowerInvariant(),
+                serviceProvider.GetRequiredService<ILogger<ElasticGameSearchService>>());
+        });
     }
 }
