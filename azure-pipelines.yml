@@ -1,6 +1,6 @@
-# Pipeline CI da FCG Catalog API
+# Pipeline CI/CD da FCG Users API
 # Etapas: Build & Test -> Build da imagem Docker -> Push para o ACR
-# (o Deploy no AKS será adicionado como um novo stage no próximo passo)
+#        -> Deploy no AKS com Rolling Update (manifestos do repositório FCG-ORCHESTRATION-API)
 
 trigger:
   branches:
@@ -9,17 +9,26 @@ trigger:
 
 pr: none
 
+resources:
+  repositories:
+    - repository: orchestration          # manifestos Kubernetes compartilhados
+      type: git
+      name: FCG-FIAP-TECH4/FCG-ORCHESTRATION-API
+      ref: refs/heads/main
+
 pool:
   vmImage: ubuntu-24.04
 
 variables:
   dockerRegistryServiceConnection: 'acr-fcg'          # nome da service connection criada no Azure DevOps
   containerRegistry: 'acrfcgfiap.azurecr.io'
-  imageRepository: 'fcg-catalog-api'
+  imageRepository: 'fcg-users-api'
   dockerfilePath: '$(Build.SourcesDirectory)/Dockerfile'
-  solution: 'FCG.Catalog.slnx'
+  solution: 'FCG.Users.slnx'
   buildConfiguration: 'Release'
   tag: '$(Build.BuildId)'                             # versão da imagem = número do build
+  k8sNamespace: 'fcg'
+  k8sDeployment: 'users-api'
 
 stages:
   - stage: BuildAndTest
@@ -75,3 +84,37 @@ stages:
               tags: |
                 $(tag)
                 latest
+
+  - stage: Deploy
+    displayName: 'Deploy no AKS (Rolling Update)'
+    dependsOn: Docker
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: Deploy
+        displayName: 'Atualizar users-api no cluster'
+        steps:
+          - checkout: orchestration
+
+          - task: DownloadSecureFile@1
+            name: kubeconfig
+            displayName: 'Baixar kubeconfig (Secure File)'
+            inputs:
+              secureFile: 'kubeconfig-aks-fcg.yaml'
+
+          - bash: echo "##vso[task.setvariable variable=KUBECONFIG]$(kubeconfig.secureFilePath)"
+            displayName: 'Login no AKS'
+
+          - bash: |
+              set -euo pipefail
+              # Gera o manifesto com a imagem desta build (tag versionada no ACR)
+              sed "s|IMAGE_TAG|$(tag)|g" k8s/users-deployment.yaml > "$AGENT_TEMPDIRECTORY/users-deployment.yaml"
+              grep "image: $(containerRegistry)" "$AGENT_TEMPDIRECTORY/users-deployment.yaml"
+
+              kubectl -n $(k8sNamespace) apply -f "$AGENT_TEMPDIRECTORY/users-deployment.yaml" -f k8s/users-service.yaml
+            displayName: 'Aplicar manifestos com a nova imagem'
+
+          - bash: |
+              set -euo pipefail
+              kubectl -n $(k8sNamespace) rollout status deployment/$(k8sDeployment) --timeout=10m
+              kubectl -n $(k8sNamespace) get pods -l app=$(k8sDeployment) -o wide
+            displayName: 'Aguardar Rolling Update'
