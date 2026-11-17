@@ -25,6 +25,8 @@ public sealed class GamesController : ControllerBase
         _mediator = mediator;
     }
 
+    //comentario teste
+
     /// <summary>
     /// Cadastra um novo jogo.
     /// Apenas administradores.
