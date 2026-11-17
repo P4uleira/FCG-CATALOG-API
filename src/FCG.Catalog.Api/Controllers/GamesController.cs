@@ -60,8 +60,11 @@ public sealed class GamesController : ControllerBase
             new GetGamesQuery(),
             cancellationToken);
 
+        Response.Headers["X-FCG-Versao"] = "v2-live-deploy";
+
         return Ok(games);
     }
+
 
     /// <summary>
     /// Busca avançada no Elasticsearch, independente do banco relacional.
